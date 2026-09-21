@@ -1,0 +1,72 @@
+{
+  "serial": {
+    "port": "COM3",
+    "baudRate": 9600,
+    "autoConnect": true
+  },
+  "activeProfile": "standard",
+  "profiles": {
+    "standard": {
+      "id": "standard",
+      "name": "Standard / Generale",
+      "keyOrder": ["1", "2", "3", "4"],
+      "keys": {
+        "1": {
+          "type": "KEY",
+          "value": "Ctrl+C",
+          "label": "Copia",
+          "enabled": true
+        },
+        "2": {
+          "type": "KEY",
+          "value": "Ctrl+V",
+          "label": "Incolla",
+          "enabled": true
+        },
+        "3": {
+          "type": "TEXT",
+          "value": "ciao@email.com",
+          "label": "Email Rapida",
+          "enabled": true
+        },
+        "4": {
+          "type": "APP",
+          "value": "calc.exe",
+          "label": "Calcolatrice",
+          "enabled": true
+        }
+      }
+    },
+    "coding": {
+      "id": "coding",
+      "name": "Coding & Dev",
+      "keyOrder": ["1", "2", "3", "4"],
+      "keys": {
+        "1": {
+          "type": "KEY",
+          "value": "Win+D",
+          "label": "Mostra Desktop",
+          "enabled": true
+        },
+        "2": {
+          "type": "POWERSHELL",
+          "value": "git status",
+          "label": "Git Status",
+          "enabled": true
+        },
+        "3": {
+          "type": "BASH",
+          "value": "echo 'Hello WSL' && date",
+          "label": "Script WSL",
+          "enabled": true
+        },
+        "4": {
+          "type": "URL",
+          "value": "https://github.com",
+          "label": "GitHub",
+          "enabled": false
+        }
+      }
+    }
+  }
+}
