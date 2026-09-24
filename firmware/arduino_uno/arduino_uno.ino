@@ -23,9 +23,8 @@ struct Button {
 
 // Configura qui i tuoi pulsanti (Pin su Arduino, ID tasto nel programma Desktop)
 Button buttons[] = {
-  { 2, 1, HIGH, 0 }, // Pulsante 1 su Pin 2 (invia BTN_1_PRESSED)
-  // Puoi decommentare o aggiungere altri pulsanti:
-  // { 3, 2, HIGH, 0 }, // Pulsante 2 su Pin 3 (invia BTN_2_PRESSED)
+  { 3, 1, HIGH, 0 }, // Pulsante 1 su Pin 2 (invia BTN_1_PRESSED)
+  { 4, 2, HIGH, 0 }, // Pulsante 2 su Pin 3 (invia BTN_2_PRESSED)
   // { 4, 3, HIGH, 0 }, // Pulsante 3 su Pin 4 (invia BTN_3_PRESSED)
   // { 5, 4, HIGH, 0 }  // Pulsante 4 su Pin 5 (invia BTN_4_PRESSED)
 };

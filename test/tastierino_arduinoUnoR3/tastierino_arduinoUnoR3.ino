@@ -1,5 +1,5 @@
 // Test per Arduino UNO R3 (Comunicazione Seriale)
-const int BUTTON_PIN = 2;
+const int BUTTON_PIN = 3;
 bool lastButtonState = HIGH;
 
 void setup() {

@@ -12,19 +12,21 @@
       "keyOrder": [
         "1",
         "2",
-        "3",
-        "4"
+        "5",
+        "4",
+        "6",
+        "3"
       ],
       "keys": {
         "1": {
           "type": "KEY",
           "value": "Ctrl+C",
-          "label": "Copia",
+          "label": "Tasto 1",
           "enabled": true
         },
         "2": {
-          "type": "KEY",
-          "value": "Ctrl+V",
+          "type": "TEXT",
+          "value": "",
           "label": "Incolla",
           "enabled": true
         },
@@ -38,6 +40,18 @@
           "type": "APP",
           "value": "calc.exe",
           "label": "Calcolatrice",
+          "enabled": true
+        },
+        "5": {
+          "type": "KEY",
+          "value": "Ctrl+C",
+          "label": "Tasto 5",
+          "enabled": true
+        },
+        "6": {
+          "type": "KEY",
+          "value": "Ctrl+C",
+          "label": "Tasto 6",
           "enabled": true
         }
       }
