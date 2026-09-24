@@ -102,6 +102,11 @@ class SerialHardwareListener extends BaseHardwareListener {
           if (!line) return;
 
           console.log(`[SerialHardware] Ricevuto: "${line}"`);
+          // Forward mixer commands directly
+          if (line.startsWith('CMD:')) {
+            this.emit('mixer-cmd', line);
+            return;
+          }
           const keyId = this.parseKeyFromLine(line);
 
           if (keyId) {
@@ -177,5 +182,15 @@ class SerialHardwareListener extends BaseHardwareListener {
     });
   }
 }
+
+  // Sends a line to Arduino via serial port
+  SerialHardwareListener.prototype.sendLine = function(line) {
+    if (this.port && this.port.isOpen) {
+      this.port.write(`${line}\n`);
+      console.log(`[SerialHardware] Sent: ${line}`);
+    } else {
+      console.warn('[SerialHardware] Cannot send, port not open');
+    }
+  };
 
 module.exports = SerialHardwareListener;

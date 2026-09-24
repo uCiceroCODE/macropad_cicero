@@ -205,6 +205,12 @@ function broadcastSse(event, data) {
  */
 function setupHardware() {
   hardware = new SerialHardwareListener();
+  // expose hardware globally for serialHandler sendLine
+  global.hardware = hardware;
+  const serialHandler = require('./serialHandler');
+  hardware.on('mixer-cmd', (cmd) => {
+    serialHandler.handleCommand(cmd);
+  });
 
   // Ricezione pressione tasto
   hardware.on('key-pressed', async ({ keyId, raw }) => {

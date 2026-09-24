@@ -1,0 +1,164 @@
+// src/main/serialHandler.js
+// Serial communication handler for per‑app volume mixer feature.
+// Uses @serialport and @serialport/parser-readline to communicate with the Arduino.
+// Parses commands from Arduino and interacts with the optional `native-sound-mixer` package.
+
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
+
+// Optional native-sound-mixer import – requires native build tools on some systems.
+let SoundMixer = null;
+let DeviceType = null;
+try {
+  const nativeMixer = require('native-sound-mixer');
+  SoundMixer = nativeMixer.default || nativeMixer.SoundMixer || nativeMixer;
+  DeviceType = nativeMixer.DeviceType;
+  console.log('[SerialHandler] native-sound-mixer loaded successfully');
+} catch (err) {
+  console.warn('[SerialHandler] native-sound-mixer not installed – mixer functionality disabled');
+  console.warn('[SerialHandler]', err.message);
+}
+
+let port = null;
+let selectedSession = null;
+
+/**
+ * Sends a line terminated by "\n" to the Arduino via the global hardware listener.
+ * @param {string} line
+ */
+function sendLine(line) {
+  if (global.hardware && typeof global.hardware.sendLine === 'function') {
+    global.hardware.sendLine(line);
+  } else {
+    console.warn('[SerialHandler] No hardware sendLine available');
+  }
+}
+
+/**
+ * Handles a command received from the Arduino.
+ * @param {string} cmd
+ */
+async function handleCommand(cmd) {
+  console.log('[SerialHandler] Received:', cmd);
+
+  // ---- GET apps ----
+  if (cmd === 'CMD:GET_MIXER_APPS') {
+    if (!SoundMixer || !DeviceType) {
+      console.warn('[SerialHandler] Mixer not available – sending mock list');
+      sendLine('MIXER_LIST:MockApp');
+      return;
+    }
+    try {
+      const device = SoundMixer.getDefaultDevice(DeviceType.RENDER);
+      if (!device) {
+        sendLine('MIXER_ERR:NO_DEVICE');
+        return;
+      }
+      const names = device.sessions
+        .map(s => s.name)
+        .filter(Boolean)
+        .slice(0, 5);
+      if (names.length === 0) {
+        sendLine('MIXER_LIST:NoApps');
+      } else {
+        sendLine(`MIXER_LIST:${names.join('|')}`);
+      }
+    } catch (err) {
+      console.error('[SerialHandler] Mixer error:', err);
+      sendLine('MIXER_ERR:GET_FAILED');
+    }
+    return;
+  }
+
+  // ---- SELECT app ----
+  if (cmd.startsWith('CMD:SELECT_APP:')) {
+    const appName = cmd.substring('CMD:SELECT_APP:'.length);
+    if (!SoundMixer || !DeviceType) {
+      // Mock: create a dummy session object
+      selectedSession = {
+        name: appName,
+        _vol: 0.5,
+        get volume() { return this._vol; },
+        set volume(v) { this._vol = v; }
+      };
+      sendLine(`MIXER_SELECTED:${appName}`);
+      return;
+    }
+    try {
+      const device = SoundMixer.getDefaultDevice(DeviceType.RENDER);
+      if (!device) {
+        sendLine('MIXER_ERR:NO_DEVICE');
+        return;
+      }
+      const session = device.sessions.find(s => s.name === appName);
+      if (session) {
+        selectedSession = session;
+        sendLine(`MIXER_SELECTED:${appName}`);
+      } else {
+        sendLine('MIXER_ERR:NotFound');
+      }
+    } catch (err) {
+      console.error('[SerialHandler] Select error:', err);
+      sendLine('MIXER_ERR:SELECT_FAILED');
+    }
+    return;
+  }
+
+  // ---- Volume up/down ----
+  if (cmd === 'CMD:VOL_UP' || cmd === 'CMD:VOL_DOWN') {
+    if (!selectedSession) {
+      sendLine('MIXER_ERR:NO_SELECTION');
+      return;
+    }
+    try {
+      const step = 0.05; // 5% step (native-sound-mixer uses 0.0–1.0 range)
+      let vol = selectedSession.volume;
+      if (cmd === 'CMD:VOL_UP') {
+        vol = Math.min(1.0, vol + step);
+      } else {
+        vol = Math.max(0.0, vol - step);
+      }
+      selectedSession.volume = vol;
+      const pct = Math.round(vol * 100);
+      sendLine(`MIXER_VOL:${selectedSession.name}|${pct}`);
+    } catch (err) {
+      console.error('[SerialHandler] Volume error:', err);
+      sendLine('MIXER_ERR:VOL_FAILED');
+    }
+    return;
+  }
+
+  console.warn('[SerialHandler] Unknown command:', cmd);
+}
+
+/**
+ * Initializes the serial port using configuration from ConfigManager.
+ */
+function initSerial() {
+  const configManager = require('./ConfigManager');
+  const cfg = configManager.getConfig();
+  if (!cfg.serial || !cfg.serial.port) {
+    console.warn('[SerialHandler] No serial port configured. Skipping init.');
+    return;
+  }
+  port = new SerialPort({
+    path: cfg.serial.port,
+    baudRate: cfg.serial.baudRate || 9600,
+    autoOpen: false,
+  });
+
+  const parser = port.pipe(new ReadlineParser({ delimiter: '\n' }));
+  parser.on('data', handleCommand);
+
+  port.on('open', () => console.log('[SerialHandler] Port opened', cfg.serial.port));
+  port.on('error', err => console.error('[SerialHandler] Port error', err));
+  port.on('close', () => console.log('[SerialHandler] Port closed'));
+
+  port.open(err => {
+    if (err) {
+      console.error('[SerialHandler] Failed to open port:', err.message);
+    }
+  });
+}
+
+module.exports = { initSerial, sendLine, handleCommand };
