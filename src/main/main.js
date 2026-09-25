@@ -378,6 +378,12 @@ function setupHttpBridge() {
         return res.end(JSON.stringify(serialHandler.getApps()));
       }
 
+      if (url.pathname === '/api/mixer/select' && req.method === 'POST') {
+        const body = await readJsonBody();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(serialHandler.selectAppByIndex(body.index)));
+      }
+
       if (url.pathname === '/api/mixer/volume' && req.method === 'POST') {
         const body = await readJsonBody();
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -414,6 +420,10 @@ function setupIpcHandlers() {
 
   ipcMain.handle('mixer:get-apps', () => {
     return serialHandler.getApps();
+  });
+
+  ipcMain.handle('mixer:select', (_event, { index }) => {
+    return serialHandler.selectAppByIndex(index);
   });
 
   ipcMain.handle('mixer:set-volume', (_event, { index, pct }) => {

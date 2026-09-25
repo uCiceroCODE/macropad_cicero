@@ -21,6 +21,7 @@ try {
 
 let port = null;
 let selectedSession = null;
+let selectedRef = null;
 
 /**
  * Sends a line terminated by "\n" to the Arduino via the global hardware listener.
@@ -93,6 +94,7 @@ async function handleCommand(cmd) {
       const session = device.sessions.find(s => s.name === appName);
       if (session) {
         selectedSession = session;
+        selectedRef = { index: device.sessions.indexOf(session), label: appName };
         sendLine(`MIXER_SELECTED:${appName}`);
       } else {
         sendLine('MIXER_ERR:NotFound');
@@ -184,24 +186,78 @@ function labelForSession(session, index) {
   return `Sessione #${index + 1}`;
 }
 
+const EXPIRED_STATE = SoundMixer && SoundMixer.AudioSessionState
+  ? SoundMixer.AudioSessionState.EXPIRED
+  : 2;
+
+function isHiddenSession(session) {
+  const name = typeof session.name === 'string' ? session.name.trim() : '';
+  const appName = typeof session.appName === 'string' ? session.appName.trim() : '';
+  if (!name && !appName) return true;
+  if (session.state === EXPIRED_STATE) return true;
+  return false;
+}
+
+function indexOfSelection(sessions) {
+  if (!selectedRef) return null;
+  const at = sessions[selectedRef.index];
+  if (at && !isHiddenSession(at) && labelForSession(at, selectedRef.index) === selectedRef.label) {
+    return selectedRef.index;
+  }
+  let fallback = null;
+  for (let i = 0; i < sessions.length; i += 1) {
+    if (isHiddenSession(sessions[i])) continue;
+    if (labelForSession(sessions[i], i) === selectedRef.label && fallback === null) {
+      fallback = i;
+    }
+  }
+  return fallback;
+}
+
 function getApps() {
   try {
     const device = getRenderDevice();
     const sessions = device.sessions || [];
-    const apps = sessions.map((session, index) => {
+    const apps = [];
+    sessions.forEach((session, rawIndex) => {
+      if (isHiddenSession(session)) return;
       const raw = Number(session.volume);
       const safe = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0;
-      return {
-        index,
-        label: labelForSession(session, index),
+      apps.push({
+        index: rawIndex,
+        label: labelForSession(session, apps.length),
         pct: Math.round(safe * 100),
         mute: session.mute === true
-      };
+      });
     });
-    return { success: true, deviceName: device.name, apps };
+    return { success: true, deviceName: device.name, apps, selectedIndex: indexOfSelection(sessions) };
   } catch (err) {
     console.error('[SerialHandler] getApps:', err.message);
-    return { success: false, error: err.message, apps: [] };
+    return { success: false, error: err.message, apps: [], selectedIndex: null };
+  }
+}
+
+function selectAppByIndex(index) {
+  try {
+    const sessions = getRenderDevice().sessions || [];
+    const session = sessions[index];
+    if (!session || isHiddenSession(session)) {
+      return { success: false, error: 'App non trovata' };
+    }
+    selectedSession = session;
+    selectedRef = { index, label: labelForSession(session, index) };
+    const raw = Number(session.volume);
+    const safe = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0;
+    return {
+      success: true,
+      index,
+      label: selectedRef.label,
+      pct: Math.round(safe * 100),
+      mute: session.mute === true
+    };
+  } catch (err) {
+    console.error('[SerialHandler] selectAppByIndex:', err.message);
+    return { success: false, error: err.message };
   }
 }
 
@@ -209,7 +265,7 @@ function setAppVolume(index, pct) {
   try {
     const sessions = getRenderDevice().sessions || [];
     const session = sessions[index];
-    if (!session) return { success: false, error: 'App non trovata' };
+    if (!session || isHiddenSession(session)) return { success: false, error: 'App non trovata' };
     const value = Number(pct);
     if (!Number.isFinite(value)) return { success: false, error: 'Valore volume non valido' };
     session.volume = Math.min(100, Math.max(0, Math.round(value))) / 100;
@@ -224,7 +280,7 @@ function setAppMute(index, mute) {
   try {
     const sessions = getRenderDevice().sessions || [];
     const session = sessions[index];
-    if (!session) return { success: false, error: 'App non trovata' };
+    if (!session || isHiddenSession(session)) return { success: false, error: 'App non trovata' };
     session.mute = mute === true;
     return { success: true, mute: session.mute };
   } catch (err) {
@@ -233,4 +289,4 @@ function setAppMute(index, mute) {
   }
 }
 
-module.exports = { initSerial, sendLine, handleCommand, getApps, setAppVolume, setAppMute };
+module.exports = { initSerial, sendLine, handleCommand, getApps, selectAppByIndex, setAppVolume, setAppMute };

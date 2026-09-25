@@ -1,4 +1,4 @@
-function MixerPane({ apps, deviceName, error, selectedIndex, onSelect, onVolume, onMute, onRefresh }) {
+function MixerPane({ apps, deviceName, error, selectedIndex, onSelect, onVolume, onMute, onRefresh, onDragChange }) {
   return (
     <div className="mixer-pane">
       <div className="mixer-toolbar">
@@ -36,6 +36,9 @@ function MixerPane({ apps, deviceName, error, selectedIndex, onSelect, onVolume,
               step="1"
               value={app.pct}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => { e.stopPropagation(); onDragChange(true); }}
+              onPointerUp={() => onDragChange(false)}
+              onPointerCancel={() => onDragChange(false)}
               onChange={(e) => onVolume(app.index, Number(e.target.value))}
             />
           </div>

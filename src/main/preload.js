@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('macroPadAPI', {
   // Configurazione
   getConfig: () => ipcRenderer.invoke('config:get'),
   mixerGetApps: () => ipcRenderer.invoke('mixer:get-apps'),
+  mixerSelect: (index) => ipcRenderer.invoke('mixer:select', { index }),
   mixerSetVolume: (index, pct) => ipcRenderer.invoke('mixer:set-volume', { index, pct }),
   mixerSetMute: (index, mute) => ipcRenderer.invoke('mixer:set-mute', { index, mute }),
   saveConfig: (newConfig) => ipcRenderer.invoke('config:save', newConfig),

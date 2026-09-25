@@ -19,6 +19,7 @@ const createApiClient = () => {
       getHardwareStatus: () => window.macroPadAPI.getHardwareStatus(),
       testAction: (act) => window.macroPadAPI.testAction(act),
       mixerGetApps: () => window.macroPadAPI.mixerGetApps(),
+      mixerSelect: (index) => window.macroPadAPI.mixerSelect(index),
       mixerSetVolume: (index, pct) => window.macroPadAPI.mixerSetVolume(index, pct),
       mixerSetMute: (index, mute) => window.macroPadAPI.mixerSetMute(index, mute),
       onKeyPressed: (cb) => window.macroPadAPI.onKeyPressed(cb),
@@ -72,6 +73,14 @@ const createApiClient = () => {
     },
     mixerGetApps: async () => {
       const r = await fetch(`${HTTP_BASE}/mixer`);
+      return await r.json();
+    },
+    mixerSelect: async (index) => {
+      const r = await fetch(`${HTTP_BASE}/mixer/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index })
+      });
       return await r.json();
     },
     mixerSetVolume: async (index, pct) => {
@@ -644,31 +653,63 @@ export default function App() {
 
   const profilesList = Object.values(config.profiles || {});
 
+  const mixerDraggingRef = useRef(false);
+
   const loadMixer = useCallback(async () => {
+    if (mixerDraggingRef.current) return;
     const result = await api.mixerGetApps();
     setMixer((prev) => ({
       ...prev,
       apps: result.apps || [],
       deviceName: result.deviceName || null,
-      error: result.success === false ? result.error : null
+      error: result.success === false ? result.error : null,
+      selectedIndex: result.selectedIndex === undefined ? null : result.selectedIndex
     }));
   }, []);
 
+  const selectMixerApp = useCallback(async (index) => {
+    const result = await api.mixerSelect(index);
+    if (result && result.success === false) {
+      setMixer((prev) => ({ ...prev, error: result.error }));
+      return;
+    }
+    setMixer((prev) => ({ ...prev, selectedIndex: index }));
+  }, []);
+
   const handleMixerVolume = useCallback(async (index, pct) => {
-    setMixer((prev) => ({ ...prev, apps: prev.apps.map((app) => (app.index === index ? { ...app, pct } : app)) }));
+    setMixer((prev) => ({
+      ...prev,
+      selectedIndex: index,
+      apps: prev.apps.map((app) => (app.index === index ? { ...app, pct } : app))
+    }));
     const result = await api.mixerSetVolume(index, pct);
     if (result && result.success === false) {
       setMixer((prev) => ({ ...prev, error: result.error }));
+      return;
     }
+    await api.mixerSelect(index);
   }, []);
 
   const handleMixerMute = useCallback(async (index, mute) => {
-    setMixer((prev) => ({ ...prev, apps: prev.apps.map((app) => (app.index === index ? { ...app, mute } : app)) }));
+    setMixer((prev) => ({
+      ...prev,
+      selectedIndex: index,
+      apps: prev.apps.map((app) => (app.index === index ? { ...app, mute } : app))
+    }));
     const result = await api.mixerSetMute(index, mute);
     if (result && result.success === false) {
       setMixer((prev) => ({ ...prev, error: result.error }));
+      return;
     }
+    await api.mixerSelect(index);
   }, []);
+
+  useEffect(() => {
+    if (view !== 'mixer') return undefined;
+    loadMixer();
+    const timer = setInterval(loadMixer, 800);
+    return () => clearInterval(timer);
+  }, [view, loadMixer]);
 
   return (
     <div className="app-container">
@@ -708,7 +749,7 @@ export default function App() {
         <button
           type="button"
           className={`view-tab${view === 'mixer' ? ' active' : ''}`}
-          onClick={() => { setView('mixer'); loadMixer(); }}
+          onClick={() => setView('mixer')}
         >
           Volume Mixer
         </button>
@@ -720,10 +761,11 @@ export default function App() {
           deviceName={mixer.deviceName}
           error={mixer.error}
           selectedIndex={mixer.selectedIndex}
-          onSelect={(index) => setMixer((prev) => ({ ...prev, selectedIndex: index }))}
+          onSelect={selectMixerApp}
           onVolume={handleMixerVolume}
           onMute={handleMixerMute}
           onRefresh={loadMixer}
+          onDragChange={(dragging) => { mixerDraggingRef.current = dragging; }}
         />
       ) : (
         /* Main Two-Column Layout */
