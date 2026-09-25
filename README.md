@@ -132,33 +132,6 @@ npm start
 
 ---
 
-## 🔒 Guida al Deploy su Repository GitHub Privata
-
-Per pubblicare questo progetto su un repository privato su GitHub:
-
-### 1. Inizializza Git (se non ancora fatto)
-```powershell
-git init
-git add .
-git commit -m "feat: initial commit Macro Pad Manager with multi-profile and native Win32 input"
-git branch -M main
-```
-
-### 2. Crea un nuovo Repository su GitHub
-1. Vai su [GitHub -> New Repository](https://github.com/new).
-2. Assegna un nome al repository (es. `macro-pad-manager`).
-3. **Imposta la visibilità su "Private"** 🔒.
-4. **NON** spuntare "Add a README file" (abbiamo già questo README pronto).
-5. Clicca su **Create repository**.
-
-### 3. Collega il Remote e Invia il Codice
-Sostituisci `TUO_USERNAME` con il tuo username GitHub:
-```powershell
-git remote add origin https://github.com/TUO_USERNAME/macro-pad-manager.git
-git push -u origin main
-```
-
----
 
 ## 📄 Licenza
 

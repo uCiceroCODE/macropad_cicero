@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ActivityBar from './component/ActivityBar';
+import Header from './component/Header';
+import KeyEditor from './component/KeyEditor';
+import KeypadPane from './component/KeypadPane';
+import ProfilesBar from './component/ProfilesBar';
 
 // Client API unificato: usa IPC se in Electron, altrimenti HTTP su localhost:5174 se aperto nel browser (Firefox/Chrome)
 const createApiClient = () => {
@@ -87,14 +92,6 @@ const createApiClient = () => {
 };
 
 const api = createApiClient();
-
-const COMMON_KEYS = [
-  'Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Ctrl+Y', 'Alt+Tab', 'Win+D',
-  'Enter', 'Esc', 'Space', 'Volume_Up', 'Volume_Down', 'Mute',
-  'PlayPause', 'F5', 'F11', 'F12', 'F13'
-];
-
-const COMMON_CHARS = ['~', '€', '@', '#', '$', '\\', '|', '{', '}', '[', ']', '`'];
 
 export default function App() {
   const [config, setConfig] = useState({
@@ -623,364 +620,65 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Top Header & Serial Connection */}
-      <header className="app-header">
-        <div className="brand-title">
-          <span className="brand-icon">⌨️</span>
-          <span>Macro Pad Manager</span>
-          <span style={{ fontSize: '0.72rem', opacity: 0.7, marginLeft: '6px' }}>
-            {api.type === 'electron' ? '🖥️ Desktop App' : '🌐 Web Browser (Bridge 5174)'}
-          </span>
-        </div>
+      <Header
+        apiType={api.type}
+        ports={ports}
+        selectedPort={selectedPort}
+        isConnected={isConnected}
+        saveStatus={saveStatus}
+        onPortChange={(port) => {
+          setSelectedPort(port);
+          persistConfig({ ...config, serial: { ...config.serial, port } });
+        }}
+        onRefreshPorts={refreshPorts}
+        onConnectToggle={handleConnectToggle}
+        onManualSave={handleManualSave}
+      />
 
-        <div className="hardware-controls">
-          <select
-            className="port-select"
-            value={selectedPort}
-            onChange={(e) => {
-              setSelectedPort(e.target.value);
-              persistConfig({ ...config, serial: { ...config.serial, port: e.target.value } });
-            }}
-            disabled={isConnected}
-          >
-            {ports.length === 0 ? (
-              <option value="">Nessuna porta COM rilevata</option>
-            ) : (
-              ports.map((p) => (
-                <option key={p.path} value={p.path}>
-                  {p.path} {p.friendlyName && p.friendlyName !== p.path ? `(${p.friendlyName})` : ''}
-                </option>
-              ))
-            )}
-          </select>
-
-          <button className="btn" onClick={refreshPorts} title="Aggiorna porte">
-            🔄
-          </button>
-
-          <button
-            className={`btn ${isConnected ? 'btn-danger' : 'btn-success'}`}
-            onClick={handleConnectToggle}
-          >
-            {isConnected ? 'Disconnetti' : 'Connetti Hardware'}
-          </button>
-
-          <div className={`status-badge ${isConnected ? 'connected' : 'disconnected'}`}>
-            <span className="status-dot"></span>
-            <span>{isConnected ? 'Connesso' : 'Disconnesso'}</span>
-          </div>
-
-          <button
-            className="btn btn-primary"
-            onClick={handleManualSave}
-            title="Salva la configurazione su disco"
-          >
-            💾 {saveStatus === 'saving' ? 'Salvataggio...' : saveStatus === 'saved' ? 'Salvato ✓' : 'Salva Config'}
-          </button>
-        </div>
-      </header>
-
-      {/* Profiles / Templates Switcher Toolbar */}
-      <div className="profiles-bar">
-        <div className="profiles-left">
-          <span className="profiles-label">📑 Profilo:</span>
-          <div className="profiles-tabs">
-            {profilesList.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className={`profile-tab ${p.id === activeProfileId ? 'active' : ''}`}
-                onClick={() => handleSelectProfile(p.id)}
-              >
-                <span>{p.id === activeProfileId ? '●' : '○'}</span>
-                <span>{p.name || p.id}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="profile-actions">
-          <button className="btn" onClick={handleCreateProfile} title="Crea un nuovo profilo">
-            ➕ Nuovo
-          </button>
-          <button className="btn" onClick={handleDuplicateProfile} title="Duplica il profilo corrente">
-            📋 Duplica
-          </button>
-          <button className="btn" onClick={handleRenameProfile} title="Rinomina il profilo corrente">
-            ✏️ Rinomina
-          </button>
-          {profilesList.length > 1 && (
-            <button className="btn btn-danger" onClick={handleDeleteProfile} title="Elimina il profilo corrente">
-              🗑️
-            </button>
-          )}
-        </div>
-      </div>
+      <ProfilesBar
+        profiles={profilesList}
+        activeProfileId={activeProfileId}
+        onSelectProfile={handleSelectProfile}
+        onCreateProfile={handleCreateProfile}
+        onDuplicateProfile={handleDuplicateProfile}
+        onRenameProfile={handleRenameProfile}
+        onDeleteProfile={handleDeleteProfile}
+      />
 
       {/* Main Two-Column Layout */}
       <main className="main-content">
-        {/* Left: Keypad Grid with Drag & Drop */}
-        <div className="keypad-pane">
-          <div className="pane-title">
-            <span>Tasti ({currentProfile.name})</span>
-            <span className="drag-hint">↕ Trascina per riordinare</span>
-          </div>
+        <KeypadPane
+          profile={currentProfile}
+          orderedKeyIds={orderedKeyIds}
+          selectedKeyId={selectedKeyId}
+          activePressedKey={activePressedKey}
+          draggedKeyId={draggedKeyId}
+          dragOverKeyId={dragOverKeyId}
+          onSelectKey={setSelectedKeyId}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
+          onAddKey={handleAddKey}
+        />
 
-          <div className="keys-grid">
-            {orderedKeyIds.map((id) => {
-              const item = (currentProfile.keys && currentProfile.keys[id]) || {};
-              const isSelected = selectedKeyId === id;
-              const isPressed = activePressedKey === id;
-              const isDragging = draggedKeyId === id;
-              const isDragOver = dragOverKeyId === id;
-              const isEnabled = item.enabled !== false;
-
-              return (
-                <div
-                  key={id}
-                  draggable={true}
-                  onDragStart={(e) => handleDragStart(e, id)}
-                  onDragOver={(e) => handleDragOver(e, id)}
-                  onDragLeave={(e) => handleDragLeave(e, id)}
-                  onDrop={(e) => handleDrop(e, id)}
-                  onDragEnd={handleDragEnd}
-                  className={`key-card ${isSelected ? 'selected' : ''} ${isPressed ? 'pressed' : ''} ${
-                    isDragging ? 'dragging' : ''
-                  } ${isDragOver ? 'drag-over' : ''} ${!isEnabled ? 'disabled' : ''}`}
-                  onClick={() => setSelectedKeyId(id)}
-                  title={!isEnabled ? 'Tasto DISABILITATO (clicca per configurare)' : 'Clicca per modificare o trascina'}
-                >
-                  <span className="key-number">#{id}</span>
-                  <span className={`key-type-tag tag-${(item.type || 'app').toLowerCase()}`}>
-                    {item.type || 'APP'}
-                  </span>
-                  <div className="key-label">{item.label || `Tasto ${id}`}</div>
-
-                  {!isEnabled && <span className="disabled-badge">OFF</span>}
-                  <span className="drag-handle" title="Trascina">⠿</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <button className="add-key-btn" onClick={handleAddKey}>
-            ➕ Aggiungi Tasto al Profilo
-          </button>
-        </div>
-
-        {/* Right: Key Config Editor */}
-        <div className="editor-pane">
-          <div className="pane-title">
-            <span>Configura Tasto <strong>#{selectedKeyId}</strong> [{currentProfile.name}]</span>
-            {Object.keys(currentProfile.keys || {}).length > 1 && (
-              <button
-                className="btn btn-danger"
-                style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                onClick={() => handleDeleteKey(selectedKeyId)}
-              >
-                Elimina Tasto
-              </button>
-            )}
-          </div>
-
-          <div className="editor-card">
-            {/* Enable / Disable Toggle Switch */}
-            <div className="enable-toggle-box">
-              <div>
-                <strong>Abilitazione Tasto #{selectedKeyId}: </strong>
-                <span style={{ color: currentKey.enabled !== false ? 'var(--success)' : 'var(--danger)' }}>
-                  {currentKey.enabled !== false ? 'ATTIVO (Esegue l\'azione)' : 'DISABILITATO (Ignora la pressione)'}
-                </span>
-              </div>
-              <button
-                type="button"
-                className={`toggle-btn ${currentKey.enabled !== false ? 'enabled' : 'disabled'}`}
-                onClick={() => handleKeyFieldChange('enabled', currentKey.enabled === false ? true : false)}
-              >
-                <span>{currentKey.enabled !== false ? '✓ Abilitato' : '✕ Disabilitato'}</span>
-              </button>
-            </div>
-
-            {/* Label Input */}
-            <div className="form-group">
-              <label>Etichetta Descrittiva Tasto</label>
-              <input
-                type="text"
-                className="form-control"
-                value={currentKey.label || ''}
-                placeholder="Es. Copia, Muto, Calcolatrice, Scrivi Email"
-                onChange={(e) => handleKeyFieldChange('label', e.target.value)}
-              />
-            </div>
-
-            {/* Action Type Selector */}
-            <div className="form-group">
-              <label>Tipo di Azione</label>
-              <div className="action-type-selector">
-                {[
-                  { id: 'KEY', icon: '⌨️', label: 'Tasto' },
-                  { id: 'TEXT', icon: '✍️', label: 'Testo' },
-                  { id: 'MACRO', icon: '⚙️', label: 'Macro' },
-                  { id: 'APP', icon: '🚀', label: 'App' },
-                  { id: 'POWERSHELL', icon: '⚡', label: 'PowerShell' },
-                  { id: 'URL', icon: '🌐', label: 'Web URL' }
-                ].map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={`type-btn ${currentKey.type === t.id ? 'active' : ''}`}
-                    onClick={() => handleKeyFieldChange('type', t.id)}
-                  >
-                    <span>{t.icon}</span>
-                    <span>{t.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="helper-text">{getActionHelperText(currentKey.type)}</div>
-            </div>
-
-            {/* Value / Command Input */}
-            <div className="form-group">
-              <label>
-                {currentKey.type === 'KEY'
-                  ? 'Tasto o Scorciatoia da simulare'
-                  : currentKey.type === 'TEXT'
-                  ? 'Carattere custom o stringa da digitare'
-                  : currentKey.type === 'MACRO'
-                  ? 'Sequenza Macro (separata da ;)'
-                  : currentKey.type === 'APP'
-                  ? 'Percorso applicazione .exe'
-                  : currentKey.type === 'POWERSHELL'
-                  ? 'Comando PowerShell'
-                  : 'Indirizzo Web (URL)'}
-              </label>
-
-              {currentKey.type === 'TEXT' || currentKey.type === 'MACRO' ? (
-                <textarea
-                  rows={3}
-                  className="form-control"
-                  value={currentKey.value !== undefined ? currentKey.value : ''}
-                  placeholder={
-                    currentKey.type === 'TEXT'
-                      ? 'Es: ~ oppure mia.email@example.com oppure un messaggio preimpostato...'
-                      : 'Es: KEY:CTRL+A; DELAY:100; KEY:BACKSPACE; TEXT:Ciao Mondo!; KEY:ENTER'
-                  }
-                  onChange={(e) => handleKeyFieldChange('value', e.target.value)}
-                />
-              ) : (
-                <input
-                  type="text"
-                  className="form-control"
-                  value={currentKey.value !== undefined ? currentKey.value : ''}
-                  placeholder={
-                    currentKey.type === 'KEY'
-                      ? 'Es: Ctrl+C, Win+D, Alt+Tab, Volume_Up, Enter...'
-                      : currentKey.type === 'APP'
-                      ? 'calc.exe oppure notepad.exe'
-                      : currentKey.type === 'POWERSHELL'
-                      ? 'Write-Host "Test PowerShell"'
-                      : 'https://github.com'
-                  }
-                  onChange={(e) => handleKeyFieldChange('value', e.target.value)}
-                />
-              )}
-
-              {/* Quick chips for KEY type */}
-              {currentKey.type === 'KEY' && (
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                    Scorciatoie rapide (clicca per inserire):
-                  </div>
-                  <div className="quick-chips">
-                    {COMMON_KEYS.map((k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        className="chip-btn"
-                        onClick={() => handleKeyFieldChange('value', k)}
-                      >
-                        {k}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Quick chips for TEXT / Caratteri speciali */}
-              {currentKey.type === 'TEXT' && (
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                    Caratteri speciali rapidi:
-                  </div>
-                  <div className="quick-chips">
-                    {COMMON_CHARS.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className="chip-btn"
-                        onClick={() => handleKeyFieldChange('value', (currentKey.value || '') + c)}
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Actions: Test & Run */}
-            <div className="editor-actions">
-              <button
-                className="btn btn-primary"
-                onClick={handleTestAction}
-                disabled={isTesting}
-              >
-                ▶️ {isTesting ? 'Esecuzione...' : 'Testa Azione Ora'}
-              </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span
-                  style={{
-                    fontSize: '0.8rem',
-                    color: saveStatus === 'error' ? 'var(--danger)' : 'var(--success)'
-                  }}
-                >
-                  {saveStatus === 'saving'
-                    ? 'Salvataggio...'
-                    : saveStatus === 'saved'
-                    ? '✓ Salvato automaticamente'
-                    : '✗ Errore salvataggio'}
-                </span>
-                <button className="btn btn-success" onClick={handleManualSave}>
-                  💾 Salva Modifiche
-                </button>
-              </div>
-            </div>
-
-            {/* Test output box */}
-            {testResult && (
-              <div className={`test-result-box ${testResult.success ? 'success' : 'error'}`}>
-                <strong>{testResult.success ? '✓ Risultato Esecuzione:' : '✗ Errore:'}</strong>
-                <div>{testResult.output || testResult.error || 'Azione eseguita con successo.'}</div>
-              </div>
-            )}
-          </div>
-        </div>
+        <KeyEditor
+          selectedKeyId={selectedKeyId}
+          currentProfile={currentProfile}
+          currentKey={currentKey}
+          saveStatus={saveStatus}
+          isTesting={isTesting}
+          testResult={testResult}
+          onDeleteKey={handleDeleteKey}
+          onFieldChange={handleKeyFieldChange}
+          onTestAction={handleTestAction}
+          onManualSave={handleManualSave}
+          getActionHelperText={getActionHelperText}
+        />
       </main>
 
-      {/* Footer Activity Bar */}
-      <footer className="activity-bar">
-        <div className="live-indicator">
-          <span>📡 {statusMessage}</span>
-        </div>
-        <div>
-          {lastEvent ? (
-            <span style={{ color: 'var(--accent)' }}>{lastEvent}</span>
-          ) : (
-            <span>In ascolto segnali hardware...</span>
-          )}
-        </div>
-      </footer>
+      <ActivityBar statusMessage={statusMessage} lastEvent={lastEvent} />
     </div>
   );
 }
