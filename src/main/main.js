@@ -4,6 +4,7 @@ const http = require('http');
 const configManager = require('./ConfigManager');
 const ActionDispatcher = require('./ActionDispatcher');
 const SerialHardwareListener = require('./hardware/SerialHardwareListener');
+const serialHandler = require('./serialHandler');
 
 // Nota per Fase 2: per passare a USB Raw HID, basta sostituire con:
 // const HidHardwareListener = require('./hardware/HidHardwareListener');
@@ -207,7 +208,6 @@ function setupHardware() {
   hardware = new SerialHardwareListener();
   // expose hardware globally for serialHandler sendLine
   global.hardware = hardware;
-  const serialHandler = require('./serialHandler');
   hardware.on('mixer-cmd', (cmd) => {
     serialHandler.handleCommand(cmd);
   });
@@ -373,6 +373,23 @@ function setupHttpBridge() {
         return res.end(JSON.stringify(result));
       }
 
+      if (url.pathname === '/api/mixer' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(serialHandler.getApps()));
+      }
+
+      if (url.pathname === '/api/mixer/volume' && req.method === 'POST') {
+        const body = await readJsonBody();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(serialHandler.setAppVolume(body.index, body.pct)));
+      }
+
+      if (url.pathname === '/api/mixer/mute' && req.method === 'POST') {
+        const body = await readJsonBody();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(serialHandler.setAppMute(body.index, body.mute)));
+      }
+
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Endpoint non trovato' }));
     } catch (err) {
@@ -393,6 +410,18 @@ function setupHttpBridge() {
 function setupIpcHandlers() {
   ipcMain.handle('config:get', () => {
     return configManager.getConfig();
+  });
+
+  ipcMain.handle('mixer:get-apps', () => {
+    return serialHandler.getApps();
+  });
+
+  ipcMain.handle('mixer:set-volume', (_event, { index, pct }) => {
+    return serialHandler.setAppVolume(index, pct);
+  });
+
+  ipcMain.handle('mixer:set-mute', (_event, { index, mute }) => {
+    return serialHandler.setAppMute(index, mute);
   });
 
   ipcMain.handle('config:save', (_event, newConfig) => {

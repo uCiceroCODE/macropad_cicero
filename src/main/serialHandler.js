@@ -161,4 +161,76 @@ function initSerial() {
   });
 }
 
-module.exports = { initSerial, sendLine, handleCommand };
+function getRenderDevice() {
+  if (!SoundMixer || !DeviceType) {
+    throw new Error('Mixer Windows non disponibile');
+  }
+  const device = SoundMixer.getDefaultDevice(DeviceType.RENDER);
+  if (!device) {
+    throw new Error('Nessun dispositivo di uscita attivo');
+  }
+  return device;
+}
+
+function labelForSession(session, index) {
+  const name = typeof session.name === 'string' ? session.name.trim() : '';
+  if (name) return name;
+  const appName = typeof session.appName === 'string' ? session.appName.trim() : '';
+  if (appName) {
+    const file = appName.split(/[\\/]/).pop();
+    const base = file ? file.replace(/\.exe$/i, '') : '';
+    if (base) return base;
+  }
+  return `Sessione #${index + 1}`;
+}
+
+function getApps() {
+  try {
+    const device = getRenderDevice();
+    const sessions = device.sessions || [];
+    const apps = sessions.map((session, index) => {
+      const raw = Number(session.volume);
+      const safe = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0;
+      return {
+        index,
+        label: labelForSession(session, index),
+        pct: Math.round(safe * 100),
+        mute: session.mute === true
+      };
+    });
+    return { success: true, deviceName: device.name, apps };
+  } catch (err) {
+    console.error('[SerialHandler] getApps:', err.message);
+    return { success: false, error: err.message, apps: [] };
+  }
+}
+
+function setAppVolume(index, pct) {
+  try {
+    const sessions = getRenderDevice().sessions || [];
+    const session = sessions[index];
+    if (!session) return { success: false, error: 'App non trovata' };
+    const value = Number(pct);
+    if (!Number.isFinite(value)) return { success: false, error: 'Valore volume non valido' };
+    session.volume = Math.min(100, Math.max(0, Math.round(value))) / 100;
+    return { success: true, pct: Math.round(session.volume * 100) };
+  } catch (err) {
+    console.error('[SerialHandler] setAppVolume:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+function setAppMute(index, mute) {
+  try {
+    const sessions = getRenderDevice().sessions || [];
+    const session = sessions[index];
+    if (!session) return { success: false, error: 'App non trovata' };
+    session.mute = mute === true;
+    return { success: true, mute: session.mute };
+  } catch (err) {
+    console.error('[SerialHandler] setAppMute:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+module.exports = { initSerial, sendLine, handleCommand, getApps, setAppVolume, setAppMute };

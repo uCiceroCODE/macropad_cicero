@@ -7,6 +7,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('macroPadAPI', {
   // Configurazione
   getConfig: () => ipcRenderer.invoke('config:get'),
+  mixerGetApps: () => ipcRenderer.invoke('mixer:get-apps'),
+  mixerSetVolume: (index, pct) => ipcRenderer.invoke('mixer:set-volume', { index, pct }),
+  mixerSetMute: (index, mute) => ipcRenderer.invoke('mixer:set-mute', { index, mute }),
   saveConfig: (newConfig) => ipcRenderer.invoke('config:save', newConfig),
 
   // Hardware / Seriale

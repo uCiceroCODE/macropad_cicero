@@ -3,6 +3,7 @@ import ActivityBar from './component/ActivityBar';
 import Header from './component/Header';
 import KeyEditor from './component/KeyEditor';
 import KeypadPane from './component/KeypadPane';
+import MixerPane from './component/MixerPane';
 import ProfilesBar from './component/ProfilesBar';
 
 // Client API unificato: usa IPC se in Electron, altrimenti HTTP su localhost:5174 se aperto nel browser (Firefox/Chrome)
@@ -17,6 +18,9 @@ const createApiClient = () => {
       disconnectSerialPort: () => window.macroPadAPI.disconnectSerialPort(),
       getHardwareStatus: () => window.macroPadAPI.getHardwareStatus(),
       testAction: (act) => window.macroPadAPI.testAction(act),
+      mixerGetApps: () => window.macroPadAPI.mixerGetApps(),
+      mixerSetVolume: (index, pct) => window.macroPadAPI.mixerSetVolume(index, pct),
+      mixerSetMute: (index, mute) => window.macroPadAPI.mixerSetMute(index, mute),
       onKeyPressed: (cb) => window.macroPadAPI.onKeyPressed(cb),
       onHardwareStatus: (cb) => window.macroPadAPI.onHardwareStatus(cb)
     };
@@ -63,6 +67,26 @@ const createApiClient = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(action)
+      });
+      return await r.json();
+    },
+    mixerGetApps: async () => {
+      const r = await fetch(`${HTTP_BASE}/mixer`);
+      return await r.json();
+    },
+    mixerSetVolume: async (index, pct) => {
+      const r = await fetch(`${HTTP_BASE}/mixer/volume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index, pct })
+      });
+      return await r.json();
+    },
+    mixerSetMute: async (index, mute) => {
+      const r = await fetch(`${HTTP_BASE}/mixer/mute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index, mute })
       });
       return await r.json();
     },
@@ -117,6 +141,8 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'error'
   const [statusMessage, setStatusMessage] = useState('Inizializzazione...');
   const [lastEvent, setLastEvent] = useState(null);
+  const [view, setView] = useState('keypad');
+  const [mixer, setMixer] = useState({ apps: [], deviceName: null, error: null, selectedIndex: null });
 
   // Drag & Drop states
   const [draggedKeyId, setDraggedKeyId] = useState(null);
@@ -618,6 +644,32 @@ export default function App() {
 
   const profilesList = Object.values(config.profiles || {});
 
+  const loadMixer = useCallback(async () => {
+    const result = await api.mixerGetApps();
+    setMixer((prev) => ({
+      ...prev,
+      apps: result.apps || [],
+      deviceName: result.deviceName || null,
+      error: result.success === false ? result.error : null
+    }));
+  }, []);
+
+  const handleMixerVolume = useCallback(async (index, pct) => {
+    setMixer((prev) => ({ ...prev, apps: prev.apps.map((app) => (app.index === index ? { ...app, pct } : app)) }));
+    const result = await api.mixerSetVolume(index, pct);
+    if (result && result.success === false) {
+      setMixer((prev) => ({ ...prev, error: result.error }));
+    }
+  }, []);
+
+  const handleMixerMute = useCallback(async (index, mute) => {
+    setMixer((prev) => ({ ...prev, apps: prev.apps.map((app) => (app.index === index ? { ...app, mute } : app)) }));
+    const result = await api.mixerSetMute(index, mute);
+    if (result && result.success === false) {
+      setMixer((prev) => ({ ...prev, error: result.error }));
+    }
+  }, []);
+
   return (
     <div className="app-container">
       <Header
@@ -645,38 +697,68 @@ export default function App() {
         onDeleteProfile={handleDeleteProfile}
       />
 
-      {/* Main Two-Column Layout */}
-      <main className="main-content">
-        <KeypadPane
-          profile={currentProfile}
-          orderedKeyIds={orderedKeyIds}
-          selectedKeyId={selectedKeyId}
-          activePressedKey={activePressedKey}
-          draggedKeyId={draggedKeyId}
-          dragOverKeyId={dragOverKeyId}
-          onSelectKey={setSelectedKeyId}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onDragEnd={handleDragEnd}
-          onAddKey={handleAddKey}
-        />
+      <div className="view-switch">
+        <button
+          type="button"
+          className={`view-tab${view === 'keypad' ? ' active' : ''}`}
+          onClick={() => setView('keypad')}
+        >
+          Tastierino
+        </button>
+        <button
+          type="button"
+          className={`view-tab${view === 'mixer' ? ' active' : ''}`}
+          onClick={() => { setView('mixer'); loadMixer(); }}
+        >
+          Volume Mixer
+        </button>
+      </div>
 
-        <KeyEditor
-          selectedKeyId={selectedKeyId}
-          currentProfile={currentProfile}
-          currentKey={currentKey}
-          saveStatus={saveStatus}
-          isTesting={isTesting}
-          testResult={testResult}
-          onDeleteKey={handleDeleteKey}
-          onFieldChange={handleKeyFieldChange}
-          onTestAction={handleTestAction}
-          onManualSave={handleManualSave}
-          getActionHelperText={getActionHelperText}
+      {view === 'mixer' ? (
+        <MixerPane
+          apps={mixer.apps}
+          deviceName={mixer.deviceName}
+          error={mixer.error}
+          selectedIndex={mixer.selectedIndex}
+          onSelect={(index) => setMixer((prev) => ({ ...prev, selectedIndex: index }))}
+          onVolume={handleMixerVolume}
+          onMute={handleMixerMute}
+          onRefresh={loadMixer}
         />
-      </main>
+      ) : (
+        /* Main Two-Column Layout */
+        <main className="main-content">
+          <KeypadPane
+            profile={currentProfile}
+            orderedKeyIds={orderedKeyIds}
+            selectedKeyId={selectedKeyId}
+            activePressedKey={activePressedKey}
+            draggedKeyId={draggedKeyId}
+            dragOverKeyId={dragOverKeyId}
+            onSelectKey={setSelectedKeyId}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+            onAddKey={handleAddKey}
+          />
+
+          <KeyEditor
+            selectedKeyId={selectedKeyId}
+            currentProfile={currentProfile}
+            currentKey={currentKey}
+            saveStatus={saveStatus}
+            isTesting={isTesting}
+            testResult={testResult}
+            onDeleteKey={handleDeleteKey}
+            onFieldChange={handleKeyFieldChange}
+            onTestAction={handleTestAction}
+            onManualSave={handleManualSave}
+            getActionHelperText={getActionHelperText}
+          />
+        </main>
+      )}
 
       <ActivityBar statusMessage={statusMessage} lastEvent={lastEvent} />
     </div>
