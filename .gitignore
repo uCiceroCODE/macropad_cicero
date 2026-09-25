@@ -24,3 +24,7 @@ scratch/
 
 # Configurazione locale dell'utente (usare config.example.json come template)
 config.json
+
+# Workspace isolati e artefatti di sviluppo
+.worktrees/
+.superpowers/
